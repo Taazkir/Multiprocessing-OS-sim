@@ -1,11 +1,11 @@
 import queue
 import time
-
 import psutil
 import threading
 import os
 import signal
 import multiprocessing
+from collections import Counter
 
 
 class ProcessManager:
@@ -80,7 +80,7 @@ class ProcessManager:
         try:
             for msg in message:
                 conn.send(msg)
-                print(f"Message sent: {msg}")
+                print(f"\nMessage sent: {msg}")
             conn.close()
         except BrokenPipeError:
             print("Connection closed.")
@@ -91,7 +91,7 @@ class ProcessManager:
                 msg = conn.recv()
                 if msg == "END":
                     break
-                print("Received the message: {}".format(msg))
+                print("\nReceived the message: {}".format(msg))
             except EOFError:
                 print("Connection closed.")
                 break
@@ -100,6 +100,7 @@ class ProcessManager:
 class ThreadManager:
     def __init__(self):
         self.threads = {}
+
     def update_threads(self):
         self.threads = {}
         for thread in threading.enumerate():
@@ -148,7 +149,7 @@ class ThreadManager:
         except AttributeError:
             print(f"Thread with ID {thread_id} does not support resuming.")
 
-    def producer(self, queue,  consumer_tid, message):
+    def producer(self, queue, consumer_tid, message):
         producer_tid = threading.get_ident()
         for msg in message:
             queue.put((producer_tid, consumer_tid, msg))
@@ -184,17 +185,44 @@ def thread_task(shared_data, message_queue):
     print("Shared data(in new thread): {}".format(shared_data[:]))
     print("Message Queue(in new thread): {}".format(list(message_queue.queue)))
 
+
 # Function to simulate creating a new thread
 def new_thread():
     print("New thread created.")
     time.sleep(25)
     print("New thread finished.")
 
+
 # Function to simulate creating a new process
 def new_process():
     print("New process created.")
-    time.sleep(30)
+    time.sleep(120)
     print("New process finished.")
+
+
+# Parallel Text File Processing
+def parts_to_process(parts):
+    """Processes parts of the text to count occurrences of each alphabetic character."""
+    # Convert parts to uppercase
+    upper_chars = parts.upper()
+    # Use Counter for character count
+    char_count = Counter(char for char in upper_chars if char.isalpha())
+    return char_count
+
+
+def parallel_processing(file_path, part_size=1024):
+    """Processes a text file in parallel."""
+    num_processes = multiprocessing.cpu_count()  # Get the number of CPU cores
+    with open(file_path, 'r') as file:
+        # Create separate parts of the file to process
+        parts = iter(lambda: file.read(part_size), '')
+        # Create a pool of processes to process the parts
+        with multiprocessing.Pool(processes=num_processes) as pool:
+            # Map the parts to the pool of processes for parallel processing
+            results = pool.map(parts_to_process, parts)
+            # Combine the results from each pool and sum the character counts
+            final_char_count = sum(results, Counter())
+    return final_char_count
 
 
 def main():
@@ -216,7 +244,8 @@ def main():
         print("12. Send Message between Threads via shared memory")
         print("13. Send Message between Processes via Pipe")
         print("14. Send Message between Processes via shared memory")
-        print("15. Exit")
+        print("15. Parallel Text File Processing")
+        print("16. Exit")
 
         choice = input("Enter your choice: ")
 
@@ -261,6 +290,8 @@ def main():
             message = input("Enter message to send: ")
             msgs = message.split(' ')
             msgs.append("END")
+
+            start = time.time()
             t1 = threading.Thread(target=thread_manager.consumer, args=(message_queue,))
             t1_id = threading.get_ident()
             t2 = threading.Thread(target=thread_manager.producer, args=(message_queue, t1_id, msgs))
@@ -268,8 +299,11 @@ def main():
             t1.start()
             t2.join()
             t1.join()
+            end = time.time()
+            print(f"Time taken: {end - start} seconds")
 
         elif choice == '12':
+            start = time.time()
             shared_data = multiprocessing.Array('i', [0])
             message_queue = queue.Queue()
             # creating new thread
@@ -279,11 +313,15 @@ def main():
             # print result Array
             print("Shared data(in main thread): {}".format(shared_data[:]))
             print("Message Queue(in main thread): {}".format(list(message_queue.queue)))
+            end = time.time()
+            print(f"Time taken: {end - start} seconds")
 
         elif choice == '13':
             message = input("Enter message to send: ")
             msgs = message.split(' ')
             msgs.append("END")
+
+            start = time.time()
             # creating a pipe
             parent_conn, child_conn = multiprocessing.Pipe()
             # creating new processes
@@ -295,8 +333,11 @@ def main():
             # wait until processes finish
             p1.join()
             p2.join()
+            end = time.time()
+            print(f"Time taken: {end - start} seconds")
 
         elif choice == '14':
+            start = time.time()
             allist = [1, 2, 3, 4, 5]
             # creating shared memory
             results = multiprocessing.Array('i', len(allist))
@@ -309,8 +350,20 @@ def main():
             print("Result(in main program): {}".format(results[:]))
             # print square_sum Value
             print("Sum of squares(in main program): {}".format(square_sum.value))
+            end = time.time()
+            print(f"Time taken: {end - start} seconds")
 
         elif choice == '15':
+            start = time.time()
+            file_path = "Text_file.txt"
+            char_count = parallel_processing(file_path)
+            print("Character Counts:")
+            for char, count in char_count.items():
+                print(f"{char}: {count}")
+            end = time.time()
+            print(f"Time taken: {end - start} seconds")
+
+        elif choice == '16':
             break
 
         else:
